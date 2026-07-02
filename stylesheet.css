@@ -1,0 +1,20 @@
+.memory-usage-label {
+  min-width: 4.75em;
+  text-align: center;
+}
+
+.memory-usage-normal .memory-usage-label {
+  color: #ffffff;
+}
+
+.memory-usage-warning .memory-usage-label {
+  color: #f8e45c;
+}
+
+.memory-usage-critical .memory-usage-label {
+  color: #ff7b63;
+}
+
+.memory-usage-unknown .memory-usage-label {
+  color: #c0bfbc;
+}
