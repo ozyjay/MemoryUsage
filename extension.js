@@ -11,6 +11,8 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 const UPDATE_INTERVAL_SECONDS = 2;
+const PANEL_MEMORY_LABEL = '▦';
+const PANEL_FILESYSTEM_LABEL = '🗀';
 const WARNING_THRESHOLD = 70;
 const CRITICAL_THRESHOLD = 90;
 
@@ -95,7 +97,7 @@ class MemoryUsageIndicator extends PanelMenu.Button {
 
         this._label = new St.Label({
             style_class: 'memory-usage-label',
-            text: 'Mem --%',
+            text: `${PANEL_MEMORY_LABEL} --%`,
             y_align: Clutter.ActorAlign.CENTER,
         });
         this.add_child(this._label);
@@ -150,7 +152,7 @@ class MemoryUsageIndicator extends PanelMenu.Button {
             stats = _readMeminfo();
         } catch (error) {
             console.error(`Memory Usage Widget: failed to read /proc/meminfo: ${error}`);
-            this._label.text = 'Mem --%';
+            this._label.text = `${PANEL_MEMORY_LABEL} --%`;
             this._setLevelClass('unknown');
             return;
         }
@@ -161,7 +163,9 @@ class MemoryUsageIndicator extends PanelMenu.Button {
             console.error(`Memory Usage Widget: failed to read filesystem usage: ${error}`);
         }
 
-        this._label.text = `Mem ${stats.usedPercent}% FS ${filesystemStats?.usedPercent ?? '--'}%`;
+        this._label.text =
+            `${PANEL_MEMORY_LABEL} ${stats.usedPercent}% ` +
+            `${PANEL_FILESYSTEM_LABEL} ${filesystemStats?.usedPercent ?? '--'}%`;
         this._ramItem.label.text = `RAM: ${_formatKib(stats.used)} / ${_formatKib(stats.total)} (${stats.usedPercent}%)`;
         this._availableItem.label.text = `Available: ${_formatKib(stats.available)}`;
 

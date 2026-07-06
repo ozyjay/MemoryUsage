@@ -35,7 +35,7 @@ journalctl --user -f /usr/bin/gnome-shell
 ## Behavior
 
 - Updates every 2 seconds.
-- Shows `Mem 42% FS 18%` in the top bar.
+- Shows `▦ 42% 🗀 18%` in the top bar.
 - Uses `/proc/meminfo` and `MemAvailable` for RAM usage.
 - Uses GNOME filesystem stats for `/` usage.
 - Shows warning color at 70% and critical color at 90% for the highest memory
