@@ -1,6 +1,19 @@
+.memory-usage-panel {
+  spacing: 0.25em;
+}
+
 .memory-usage-label {
-  min-width: 8.5em;
   text-align: center;
+}
+
+.memory-usage-icon {
+  min-width: 1.2em;
+}
+
+.memory-usage-number.mini-font {
+  font-size: 0.82em;
+  font-weight: 600;
+  min-width: 2.5em;
 }
 
 .memory-usage-normal .memory-usage-label {

@@ -12,9 +12,33 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 const UPDATE_INTERVAL_SECONDS = 2;
 const PANEL_MEMORY_LABEL = '▦';
-const PANEL_FILESYSTEM_LABEL = '🗀';
+const PANEL_FILESYSTEM_LABEL = '🖴';
 const WARNING_THRESHOLD = 70;
 const CRITICAL_THRESHOLD = 90;
+
+function _workSsdPaths() {
+    const userName = GLib.get_user_name();
+
+    return [
+        `/run/media/${userName}/Work`,
+        `/media/${userName}/Work`,
+        '/mnt/Work',
+        '/mnt/work',
+        '/media/Work',
+        '/work',
+    ];
+}
+
+const STORAGE_FILESYSTEMS = [
+    {
+        name: 'Fedora SSD',
+        paths: ['/'],
+    },
+    {
+        name: 'Work SSD',
+        paths: _workSsdPaths(),
+    },
+];
 
 function _readMeminfo() {
     const [, contents] = GLib.file_get_contents('/proc/meminfo');
@@ -78,6 +102,32 @@ function _readFilesystemUsage(path = '/') {
     };
 }
 
+function _readStorageUsage(storage) {
+    let lastError = null;
+
+    for (const path of storage.paths) {
+        if (!GLib.file_test(path, GLib.FileTest.IS_DIR))
+            continue;
+
+        try {
+            return {
+                ..._readFilesystemUsage(path),
+                name: storage.name,
+                mounted: true,
+            };
+        } catch (error) {
+            lastError = error;
+        }
+    }
+
+    return {
+        name: storage.name,
+        paths: storage.paths,
+        mounted: false,
+        error: lastError,
+    };
+}
+
 function _formatBytes(bytes) {
     const gib = 1024 * 1024 * 1024;
     const mib = 1024 * 1024;
@@ -95,12 +145,43 @@ class MemoryUsageIndicator extends PanelMenu.Button {
 
         this._timeoutId = 0;
 
-        this._label = new St.Label({
-            style_class: 'memory-usage-label',
-            text: `${PANEL_MEMORY_LABEL} --%`,
+        this._panelBox = new St.BoxLayout({
+            style_class: 'memory-usage-panel',
             y_align: Clutter.ActorAlign.CENTER,
         });
-        this.add_child(this._label);
+        this.add_child(this._panelBox);
+
+        this._memoryIconLabel = new St.Label({
+            style_class: 'memory-usage-label memory-usage-icon',
+            text: PANEL_MEMORY_LABEL,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._memoryPercentLabel = new St.Label({
+            style_class: 'memory-usage-label memory-usage-number mini-font',
+            text: '--%',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+
+        this._panelBox.add_child(this._memoryIconLabel);
+        this._panelBox.add_child(this._memoryPercentLabel);
+
+        this._storagePercentLabels = STORAGE_FILESYSTEMS.map(() => {
+            const iconLabel = new St.Label({
+                style_class: 'memory-usage-label memory-usage-icon',
+                text: PANEL_FILESYSTEM_LABEL,
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+            const percentLabel = new St.Label({
+                style_class: 'memory-usage-label memory-usage-number mini-font',
+                text: '--%',
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+
+            this._panelBox.add_child(iconLabel);
+            this._panelBox.add_child(percentLabel);
+
+            return percentLabel;
+        });
 
         this._ramItem = new PopupMenu.PopupMenuItem('RAM: --', {
             reactive: false,
@@ -114,16 +195,18 @@ class MemoryUsageIndicator extends PanelMenu.Button {
             reactive: false,
             can_focus: false,
         });
-        this._filesystemItem = new PopupMenu.PopupMenuItem('Filesystem: --', {
-            reactive: false,
-            can_focus: false,
-        });
+        this._storageItems = STORAGE_FILESYSTEMS.map(storage =>
+            new PopupMenu.PopupMenuItem(`${storage.name}: --`, {
+                reactive: false,
+                can_focus: false,
+            }));
 
         this.menu.addMenuItem(this._ramItem);
         this.menu.addMenuItem(this._availableItem);
         this.menu.addMenuItem(this._swapItem);
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        this.menu.addMenuItem(this._filesystemItem);
+        for (const item of this._storageItems)
+            this.menu.addMenuItem(item);
 
         this._update();
         this._timeoutId = GLib.timeout_add_seconds(
@@ -146,26 +229,29 @@ class MemoryUsageIndicator extends PanelMenu.Button {
 
     _update() {
         let stats;
-        let filesystemStats = null;
+        let storageStats = [];
 
         try {
             stats = _readMeminfo();
         } catch (error) {
             console.error(`Memory Usage Widget: failed to read /proc/meminfo: ${error}`);
-            this._label.text = `${PANEL_MEMORY_LABEL} --%`;
+            this._memoryPercentLabel.text = '--%';
+            for (const label of this._storagePercentLabels)
+                label.text = '--%';
             this._setLevelClass('unknown');
             return;
         }
 
-        try {
-            filesystemStats = _readFilesystemUsage('/');
-        } catch (error) {
-            console.error(`Memory Usage Widget: failed to read filesystem usage: ${error}`);
-        }
+        storageStats = STORAGE_FILESYSTEMS.map(storage => {
+            const usage = _readStorageUsage(storage);
 
-        this._label.text =
-            `${PANEL_MEMORY_LABEL} ${stats.usedPercent}% ` +
-            `${PANEL_FILESYSTEM_LABEL} ${filesystemStats?.usedPercent ?? '--'}%`;
+            if (usage.error)
+                console.error(`Memory Usage Widget: failed to read ${storage.name} usage: ${usage.error}`);
+
+            return usage;
+        });
+
+        this._memoryPercentLabel.text = `${stats.usedPercent}%`;
         this._ramItem.label.text = `RAM: ${_formatKib(stats.used)} / ${_formatKib(stats.total)} (${stats.usedPercent}%)`;
         this._availableItem.label.text = `Available: ${_formatKib(stats.available)}`;
 
@@ -176,15 +262,25 @@ class MemoryUsageIndicator extends PanelMenu.Button {
             this._swapItem.label.text = 'Swap: not configured';
         }
 
-        if (filesystemStats) {
-            this._filesystemItem.label.text =
-                `Filesystem /: ${_formatBytes(filesystemStats.used)} / ${_formatBytes(filesystemStats.total)} ` +
-                `(${filesystemStats.usedPercent}%)`;
-        } else {
-            this._filesystemItem.label.text = 'Filesystem /: unavailable';
-        }
+        storageStats.forEach((storage, index) => {
+            if (storage.mounted) {
+                this._storagePercentLabels[index].text = `${storage.usedPercent}%`;
+                this._storageItems[index].label.text =
+                    `${storage.name} (${storage.path}): ${_formatBytes(storage.used)} / ${_formatBytes(storage.total)} ` +
+                    `(${storage.usedPercent}%)`;
+            } else {
+                this._storagePercentLabels[index].text = '--%';
+                this._storageItems[index].label.text =
+                    `${storage.name}: not mounted`;
+            }
+        });
 
-        const highestUsedPercent = Math.max(stats.usedPercent, filesystemStats?.usedPercent ?? 0);
+        let highestUsedPercent = stats.usedPercent;
+
+        for (const storage of storageStats) {
+            if (storage.mounted)
+                highestUsedPercent = Math.max(highestUsedPercent, storage.usedPercent);
+        }
 
         if (highestUsedPercent >= CRITICAL_THRESHOLD)
             this._setLevelClass('critical');
