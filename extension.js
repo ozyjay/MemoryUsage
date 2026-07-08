@@ -13,7 +13,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 const UPDATE_INTERVAL_SECONDS = 2;
 const PANEL_MEMORY_LABEL = '▦';
 const PANEL_FILESYSTEM_LABEL = '🖴';
-const PANEL_TEMPERATURE_LABEL = '🌡';
+const PANEL_TEMPERATURE_LABEL = '🔥';
 const WARNING_THRESHOLD = 70;
 const CRITICAL_THRESHOLD = 90;
 const TEMPERATURE_WARNING_THRESHOLD_C = 75;
@@ -129,6 +129,19 @@ function _parseMillidegreeTemperature(rawText) {
 
 function _formatTemperature(temperature) {
     return `${Math.round(temperature)}°C`;
+}
+
+function _formatPanelSensorName(name) {
+    const maxLength = 14;
+
+    if (name.length <= maxLength)
+        return name;
+
+    return `${name.slice(0, maxLength - 1)}…`;
+}
+
+function _formatPanelTemperature(sensor) {
+    return `${_formatPanelSensorName(sensor.name)} ${_formatTemperature(sensor.temperature)}`;
 }
 
 function _readHwmonTemperatureSensors() {
@@ -353,6 +366,8 @@ class FedoraUsageIndicator extends PanelMenu.Button {
             reactive: false,
             can_focus: false,
         });
+        this._temperatureSensorsSubMenu =
+            new PopupMenu.PopupSubMenuMenuItem('Other temperature sensors');
         this._temperatureSensorItems = [];
         this._temperatureSensorSeparator = new PopupMenu.PopupSeparatorMenuItem();
         this._storageItems = STORAGE_FILESYSTEMS.map(storage =>
@@ -365,6 +380,7 @@ class FedoraUsageIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(this._availableItem);
         this.menu.addMenuItem(this._swapItem);
         this.menu.addMenuItem(this._temperatureItem);
+        this.menu.addMenuItem(this._temperatureSensorsSubMenu);
         this.menu.addMenuItem(this._temperatureSensorSeparator);
         for (const item of this._storageItems)
             this.menu.addMenuItem(item);
@@ -429,7 +445,7 @@ class FedoraUsageIndicator extends PanelMenu.Button {
         }
 
         if (temperatureStats.available) {
-            this._temperatureLabel.text = _formatTemperature(temperatureStats.hottest.temperature);
+            this._temperatureLabel.text = _formatPanelTemperature(temperatureStats.hottest);
             this._temperatureItem.label.text =
                 `Hottest: ${temperatureStats.hottest.name} ` +
                 `${_formatTemperature(temperatureStats.hottest.temperature)}`;
@@ -438,7 +454,7 @@ class FedoraUsageIndicator extends PanelMenu.Button {
             this._temperatureItem.label.text = 'Hottest: unavailable';
         }
 
-        this._setTemperatureSensorItems(temperatureStats.sensors);
+        this._setTemperatureSensorItems(temperatureStats.sensors, temperatureStats.hottest);
 
         storageStats.forEach((storage, index) => {
             if (storage.mounted) {
@@ -473,20 +489,37 @@ class FedoraUsageIndicator extends PanelMenu.Button {
             this._setLevelClass('normal');
     }
 
-    _setTemperatureSensorItems(sensors) {
+    _setTemperatureSensorItems(sensors, hottestSensor = null) {
         for (const item of this._temperatureSensorItems)
             item.destroy();
 
-        this._temperatureSensorItems = sensors.map(sensor =>
-            new PopupMenu.PopupMenuItem(
-                `  ${sensor.name}: ${_formatTemperature(sensor.temperature)}`,
-                {
+        const otherSensors = hottestSensor === null
+            ? sensors
+            : sensors.filter(sensor => sensor !== hottestSensor);
+        const sensorCount = otherSensors.length;
+
+        this._temperatureSensorsSubMenu.label.text =
+            `Other temperature sensors (${sensorCount})`;
+
+        if (sensorCount === 0) {
+            this._temperatureSensorItems = [
+                new PopupMenu.PopupMenuItem('No other sensors found', {
                     reactive: false,
                     can_focus: false,
-                }));
+                }),
+            ];
+        } else {
+            this._temperatureSensorItems = otherSensors.map(sensor =>
+                new PopupMenu.PopupMenuItem(
+                    `${sensor.name}: ${_formatTemperature(sensor.temperature)}`,
+                    {
+                        reactive: false,
+                        can_focus: false,
+                    }));
+        }
 
-        this._temperatureSensorItems.forEach((item, index) =>
-            this.menu.addMenuItem(item, 4 + index));
+        this._temperatureSensorItems.forEach(item =>
+            this._temperatureSensorsSubMenu.menu.addMenuItem(item));
     }
 
     _setLevelClass(level) {
