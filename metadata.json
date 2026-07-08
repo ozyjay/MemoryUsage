@@ -1,7 +1,7 @@
 {
-  "name": "Memory Usage Widget",
+  "name": "FedoraUsage",
   "description": "Show current RAM, swap, temperature, and filesystem usage in the GNOME top bar.",
-  "uuid": "memory-usage-widget@local",
+  "uuid": "FedoraUsage@local",
   "shell-version": [
     "50"
   ],

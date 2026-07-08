@@ -1,4 +1,4 @@
-# Memory Usage Widget
+# FedoraUsage
 
 A small GNOME Shell extension for Fedora Workstation that shows RAM,
 temperature, and the Fedora and Work SSD usage in the top bar, and adds a
@@ -17,7 +17,7 @@ Then log out and back in, or restart GNOME Shell if your session supports it.
 Enable the extension with:
 
 ```bash
-gnome-extensions enable memory-usage-widget@local
+gnome-extensions enable FedoraUsage@local
 ```
 
 ## Validate

@@ -1,10 +1,10 @@
 $ErrorActionPreference = 'Stop'
 
-$Uuid = 'memory-usage-widget@local'
+$Uuid = 'FedoraUsage@local'
 $SourceDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $TargetDir = Join-Path $HOME ".local/share/gnome-shell/extensions/$Uuid"
 $TempRoot = if ($env:TMPDIR) { $env:TMPDIR } else { '/tmp' }
-$PackDir = Join-Path $TempRoot 'memory-usage-widget-test'
+$PackDir = Join-Path $TempRoot 'FedoraUsage-test'
 
 if (Get-Command jq -ErrorAction SilentlyContinue) {
     & jq empty (Join-Path $SourceDir 'metadata.json') | Out-Null

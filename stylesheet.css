@@ -1,33 +1,33 @@
-.memory-usage-panel {
+.fedora-usage-panel {
   spacing: 0.25em;
 }
 
-.memory-usage-label {
+.fedora-usage-label {
   text-align: center;
 }
 
-.memory-usage-icon {
+.fedora-usage-icon {
   min-width: 1.2em;
 }
 
-.memory-usage-number.mini-font {
+.fedora-usage-number.mini-font {
   font-size: 0.82em;
   font-weight: 600;
   min-width: 2.5em;
 }
 
-.memory-usage-normal .memory-usage-label {
+.fedora-usage-normal .fedora-usage-label {
   color: #ffffff;
 }
 
-.memory-usage-warning .memory-usage-label {
+.fedora-usage-warning .fedora-usage-label {
   color: #f8e45c;
 }
 
-.memory-usage-critical .memory-usage-label {
+.fedora-usage-critical .fedora-usage-label {
   color: #ff7b63;
 }
 
-.memory-usage-unknown .memory-usage-label {
+.fedora-usage-unknown .fedora-usage-label {
   color: #c0bfbc;
 }

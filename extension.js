@@ -199,14 +199,14 @@ function _readTemperatureStats() {
     try {
         sensors = _readHwmonTemperatureSensors();
     } catch (error) {
-        console.error(`Memory Usage Widget: failed to read hwmon temperature sensors: ${error}`);
+        console.error(`FedoraUsage: failed to read hwmon temperature sensors: ${error}`);
     }
 
     if (sensors.length === 0) {
         try {
             sensors = _readThermalZoneTemperatureSensors();
         } catch (error) {
-            console.error(`Memory Usage Widget: failed to read thermal zone temperature sensors: ${error}`);
+            console.error(`FedoraUsage: failed to read thermal zone temperature sensors: ${error}`);
         }
     }
 
@@ -278,26 +278,26 @@ function _formatBytes(bytes) {
     return `${Math.round(bytes / mib)} MiB`;
 }
 
-const MemoryUsageIndicator = GObject.registerClass(
-class MemoryUsageIndicator extends PanelMenu.Button {
+const FedoraUsageIndicator = GObject.registerClass(
+class FedoraUsageIndicator extends PanelMenu.Button {
     constructor() {
-        super(0.0, 'Memory Usage Widget');
+        super(0.0, 'FedoraUsage');
 
         this._timeoutId = 0;
 
         this._panelBox = new St.BoxLayout({
-            style_class: 'memory-usage-panel',
+            style_class: 'fedora-usage-panel',
             y_align: Clutter.ActorAlign.CENTER,
         });
         this.add_child(this._panelBox);
 
         this._memoryIconLabel = new St.Label({
-            style_class: 'memory-usage-label memory-usage-icon',
+            style_class: 'fedora-usage-label fedora-usage-icon',
             text: PANEL_MEMORY_LABEL,
             y_align: Clutter.ActorAlign.CENTER,
         });
         this._memoryPercentLabel = new St.Label({
-            style_class: 'memory-usage-label memory-usage-number mini-font',
+            style_class: 'fedora-usage-label fedora-usage-number mini-font',
             text: '--%',
             y_align: Clutter.ActorAlign.CENTER,
         });
@@ -306,12 +306,12 @@ class MemoryUsageIndicator extends PanelMenu.Button {
         this._panelBox.add_child(this._memoryPercentLabel);
 
         this._temperatureIconLabel = new St.Label({
-            style_class: 'memory-usage-label memory-usage-icon',
+            style_class: 'fedora-usage-label fedora-usage-icon',
             text: PANEL_TEMPERATURE_LABEL,
             y_align: Clutter.ActorAlign.CENTER,
         });
         this._temperatureLabel = new St.Label({
-            style_class: 'memory-usage-label memory-usage-number mini-font',
+            style_class: 'fedora-usage-label fedora-usage-number mini-font',
             text: '--°C',
             y_align: Clutter.ActorAlign.CENTER,
         });
@@ -321,12 +321,12 @@ class MemoryUsageIndicator extends PanelMenu.Button {
 
         this._storagePercentLabels = STORAGE_FILESYSTEMS.map(() => {
             const iconLabel = new St.Label({
-                style_class: 'memory-usage-label memory-usage-icon',
+                style_class: 'fedora-usage-label fedora-usage-icon',
                 text: PANEL_FILESYSTEM_LABEL,
                 y_align: Clutter.ActorAlign.CENTER,
             });
             const percentLabel = new St.Label({
-                style_class: 'memory-usage-label memory-usage-number mini-font',
+                style_class: 'fedora-usage-label fedora-usage-number mini-font',
                 text: '--%',
                 y_align: Clutter.ActorAlign.CENTER,
             });
@@ -394,7 +394,7 @@ class MemoryUsageIndicator extends PanelMenu.Button {
         try {
             stats = _readMeminfo();
         } catch (error) {
-            console.error(`Memory Usage Widget: failed to read /proc/meminfo: ${error}`);
+            console.error(`FedoraUsage: failed to read /proc/meminfo: ${error}`);
             this._memoryPercentLabel.text = '--%';
             this._temperatureLabel.text = '--°C';
             for (const label of this._storagePercentLabels)
@@ -408,7 +408,7 @@ class MemoryUsageIndicator extends PanelMenu.Button {
             const usage = _readStorageUsage(storage);
 
             if (usage.error)
-                console.error(`Memory Usage Widget: failed to read ${storage.name} usage: ${usage.error}`);
+                console.error(`FedoraUsage: failed to read ${storage.name} usage: ${usage.error}`);
 
             return usage;
         });
@@ -469,16 +469,16 @@ class MemoryUsageIndicator extends PanelMenu.Button {
 
     _setLevelClass(level) {
         for (const name of ['normal', 'warning', 'critical', 'unknown'])
-            this.remove_style_class_name(`memory-usage-${name}`);
+            this.remove_style_class_name(`fedora-usage-${name}`);
 
-        this.add_style_class_name(`memory-usage-${level}`);
+        this.add_style_class_name(`fedora-usage-${level}`);
     }
 });
 
-export default class MemoryUsageExtension extends Extension {
+export default class FedoraUsageExtension extends Extension {
     enable() {
-        this._indicator = new MemoryUsageIndicator();
-        Main.panel.addToStatusArea('memory-usage-widget', this._indicator, 0, 'right');
+        this._indicator = new FedoraUsageIndicator();
+        Main.panel.addToStatusArea('FedoraUsage', this._indicator, 0, 'right');
     }
 
     disable() {

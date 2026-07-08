@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$Uuid = 'memory-usage-widget@local'
+$Uuid = 'FedoraUsage@local'
 $SourceDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $TargetDir = Join-Path $HOME ".local/share/gnome-shell/extensions/$Uuid"
 
