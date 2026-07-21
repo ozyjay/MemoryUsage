@@ -12,6 +12,15 @@ if (Get-Command jq -ErrorAction SilentlyContinue) {
     & python3 -m json.tool (Join-Path $SourceDir 'metadata.json') | Out-Null
 }
 
+if (-not (Get-Command glib-compile-schemas -ErrorAction SilentlyContinue)) {
+    throw 'glib-compile-schemas is required to validate the extension settings.'
+}
+
+& glib-compile-schemas --strict --dry-run (Join-Path $SourceDir 'schemas')
+if ($LASTEXITCODE -ne 0) {
+    throw 'Settings schema validation failed.'
+}
+
 if (Test-Path $PackDir) {
     Remove-Item -Recurse -Force $PackDir
 }

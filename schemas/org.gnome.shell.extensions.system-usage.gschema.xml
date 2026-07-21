@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.system-usage"
+          path="/org/gnome/shell/extensions/system-usage/">
+    <key name="sensor-history-enabled" type="b">
+      <default>true</default>
+      <summary>Record sensor history</summary>
+      <description>Write timestamped system sensor snapshots to daily log files.</description>
+    </key>
+  </schema>
+</schemalist>

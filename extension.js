@@ -22,6 +22,10 @@ const WARNING_THRESHOLD = 70;
 const CRITICAL_THRESHOLD = 90;
 const TEMPERATURE_WARNING_THRESHOLD_C = 75;
 const TEMPERATURE_CRITICAL_THRESHOLD_C = 90;
+const SENSOR_LOG_DIRECTORY_NAME = 'System Usage Logs';
+const SENSOR_LOG_RETENTION_DAYS = 7;
+const SENSOR_LOG_FILE_PATTERN = /^sensor-data-(\d{4}-\d{2}-\d{2})\.jsonl$/;
+const SENSOR_HISTORY_ENABLED_KEY = 'sensor-history-enabled';
 
 const STORAGE_FILESYSTEMS = [
     {
@@ -102,6 +106,80 @@ function _listDirectoryNames(path) {
     }
 
     return names;
+}
+
+function _setOwnerOnlyPermissions(file, mode) {
+    file.set_attribute_uint32(
+        Gio.FILE_ATTRIBUTE_UNIX_MODE,
+        mode,
+        Gio.FileQueryInfoFlags.NONE,
+        null);
+}
+
+function _removeExpiredSensorLogs(directoryPath, now) {
+    const oldestRetainedDate = now
+        .add_days(-(SENSOR_LOG_RETENTION_DAYS - 1))
+        .format('%Y-%m-%d');
+
+    for (const fileName of _listDirectoryNames(directoryPath)) {
+        const match = fileName.match(SENSOR_LOG_FILE_PATTERN);
+
+        if (!match || match[1] >= oldestRetainedDate)
+            continue;
+
+        Gio.File.new_for_path(`${directoryPath}/${fileName}`).delete(null);
+    }
+}
+
+class SensorHistoryLogger {
+    constructor() {
+        this._directoryPath = GLib.build_filenamev([
+            GLib.get_home_dir(),
+            SENSOR_LOG_DIRECTORY_NAME,
+        ]);
+        this._lastCleanupDate = null;
+    }
+
+    log(snapshot) {
+        const now = GLib.DateTime.new_now_local();
+        const date = now.format('%Y-%m-%d');
+        const directory = Gio.File.new_for_path(this._directoryPath);
+
+        if (GLib.mkdir_with_parents(this._directoryPath, 0o700) !== 0)
+            throw new Error(`could not create ${this._directoryPath}`);
+
+        _setOwnerOnlyPermissions(directory, 0o700);
+
+        const logFile = Gio.File.new_for_path(
+            `${this._directoryPath}/sensor-data-${date}.jsonl`);
+        const output = logFile.append_to(Gio.FileCreateFlags.PRIVATE, null);
+
+        try {
+            const record = {
+                timestamp: now.format_iso8601(),
+                ...snapshot,
+            };
+            const encodedRecord = new TextEncoder('utf-8')
+                .encode(`${JSON.stringify(record)}\n`);
+
+            output.write_all(encodedRecord, null);
+        } finally {
+            output.close(null);
+        }
+
+        _setOwnerOnlyPermissions(logFile, 0o600);
+
+        if (this._lastCleanupDate !== date) {
+            try {
+                _removeExpiredSensorLogs(this._directoryPath, now);
+            } catch (error) {
+                console.error(
+                    `System Usage Monitor: failed to remove expired sensor history: ${error}`);
+            }
+
+            this._lastCleanupDate = date;
+        }
+    }
 }
 
 function _parseMillidegreeTemperature(rawText) {
@@ -237,6 +315,7 @@ function _formatPanelTemperature(sensor) {
 
 function _readHwmonTemperatureSensors() {
     const sensors = [];
+    const sourcePaths = new Set();
 
     for (const directoryName of _listDirectoryNames('/sys/class/hwmon')) {
         if (!directoryName.startsWith('hwmon'))
@@ -260,9 +339,20 @@ function _readHwmonTemperatureSensors() {
                 continue;
 
             const label = _readOptionalTextFile(`${basePath}/temp${match[1]}_label`);
+            const sourcePath = `${basePath}/${fileName}`;
+
+            if (sourcePaths.has(sourcePath))
+                continue;
+
+            sourcePaths.add(sourcePath);
 
             sensors.push({
                 name: label ? `${deviceName} ${label}` : deviceName,
+                source: 'hwmon',
+                sourcePath,
+                device: deviceName,
+                index: Number.parseInt(match[1], 10),
+                label,
                 temperature,
             });
         }
@@ -273,6 +363,7 @@ function _readHwmonTemperatureSensors() {
 
 function _readThermalZoneTemperatureSensors() {
     const sensors = [];
+    const sourcePaths = new Set();
 
     for (const directoryName of _listDirectoryNames('/sys/class/thermal')) {
         if (!directoryName.startsWith('thermal_zone'))
@@ -288,8 +379,20 @@ function _readThermalZoneTemperatureSensors() {
         if (temperature === null)
             continue;
 
+        const sourcePath = `${basePath}/temp`;
+
+        if (sourcePaths.has(sourcePath))
+            continue;
+
+        sourcePaths.add(sourcePath);
+
         sensors.push({
             name: type,
+            source: 'thermal_zone',
+            sourcePath,
+            device: type,
+            index: Number.parseInt(directoryName.replace('thermal_zone', ''), 10),
+            label: type,
             temperature,
         });
     }
@@ -326,6 +429,7 @@ function _readTemperatureStats() {
 
 function _readFanStats() {
     const fans = [];
+    const sourcePaths = new Set();
 
     try {
         for (const directoryName of _listDirectoryNames('/sys/class/hwmon')) {
@@ -344,17 +448,25 @@ function _readFanStats() {
                 const speed = Number.parseInt(
                     _readOptionalTextFile(`${basePath}/${fileName}`) ?? '', 10);
 
-                // Stopped fans are deliberately omitted from both the panel and menu.
-                if (!Number.isFinite(speed) || speed <= 0)
+                if (!Number.isFinite(speed) || speed < 0)
                     continue;
 
                 const number = Number.parseInt(match[1], 10);
                 const label = _readOptionalTextFile(`${basePath}/fan${number}_label`);
+                const sourcePath = `${basePath}/${fileName}`;
+
+                if (sourcePaths.has(sourcePath))
+                    continue;
+
+                sourcePaths.add(sourcePath);
 
                 fans.push({
-                    deviceName,
+                    source: 'hwmon',
+                    sourcePath,
+                    device: deviceName,
                     number,
                     name: label || `Fan ${number}`,
+                    label,
                     speed,
                 });
             }
@@ -364,13 +476,67 @@ function _readFanStats() {
     }
 
     fans.sort((left, right) =>
-        left.number - right.number || left.deviceName.localeCompare(right.deviceName));
+        left.number - right.number || left.device.localeCompare(right.device));
 
-    const fanOne = fans.find(fan => fan.number === 1) ?? null;
+    // Stopped fans are recorded in history but remain hidden from the panel and menu.
+    const activeFans = fans.filter(fan => fan.speed > 0);
+
+    const fanOne = activeFans.find(fan => fan.number === 1) ?? null;
 
     return {
         fanOne,
-        otherFans: fans.filter(fan => fan !== fanOne),
+        otherFans: activeFans.filter(fan => fan !== fanOne),
+        allFans: fans,
+    };
+}
+
+function _buildSensorSnapshot(memoryStats, temperatureStats, fanStats, storageStats) {
+    return {
+        schemaVersion: 1,
+        memory: {
+            totalKib: memoryStats.total,
+            availableKib: memoryStats.available,
+            usedKib: memoryStats.used,
+            usedPercent: memoryStats.usedPercent,
+        },
+        swap: {
+            totalKib: memoryStats.swapTotal,
+            usedKib: memoryStats.swapUsed,
+            usedPercent: memoryStats.swapPercent,
+        },
+        filesystems: storageStats.map(storage => storage.mounted
+            ? {
+                name: storage.name,
+                path: storage.path,
+                mounted: true,
+                totalBytes: storage.total,
+                freeBytes: storage.free,
+                usedBytes: storage.used,
+                usedPercent: storage.usedPercent,
+            }
+            : {
+                name: storage.name,
+                paths: storage.paths,
+                mounted: false,
+            }),
+        temperatures: temperatureStats.sensors.map(sensor => ({
+            source: sensor.source,
+            sourcePath: sensor.sourcePath,
+            device: sensor.device,
+            index: sensor.index,
+            label: sensor.label,
+            name: sensor.displayName,
+            temperatureC: sensor.temperature,
+        })),
+        fans: fanStats.allFans.map(fan => ({
+            source: fan.source,
+            sourcePath: fan.sourcePath,
+            device: fan.device,
+            index: fan.number,
+            label: fan.label,
+            name: fan.name,
+            speedRpm: fan.speed,
+        })),
     };
 }
 
@@ -435,10 +601,12 @@ function _formatBytes(bytes) {
 
 const SystemUsageIndicator = GObject.registerClass(
 class SystemUsageIndicator extends PanelMenu.Button {
-    constructor() {
+    constructor(settings) {
         super(0.0, 'System Usage Monitor');
 
         this._timeoutId = 0;
+        this._settings = settings;
+        this._historyLogger = new SensorHistoryLogger();
 
         this._panelBox = new St.BoxLayout({
             style_class: 'system-usage-panel',
@@ -600,6 +768,15 @@ class SystemUsageIndicator extends PanelMenu.Button {
             return usage;
         });
 
+        if (this._settings.get_boolean(SENSOR_HISTORY_ENABLED_KEY)) {
+            try {
+                this._historyLogger.log(
+                    _buildSensorSnapshot(stats, temperatureStats, fanStats, storageStats));
+            } catch (error) {
+                console.error(`System Usage Monitor: failed to write sensor history: ${error}`);
+            }
+        }
+
         this._memoryPercentLabel.text = `${stats.usedPercent}%`;
         this._ramItem.label.text = `RAM: ${_formatKib(stats.used)} / ${_formatKib(stats.total)} (${stats.usedPercent}%)`;
 
@@ -732,7 +909,8 @@ class SystemUsageIndicator extends PanelMenu.Button {
 
 export default class SystemUsageExtension extends Extension {
     enable() {
-        this._indicator = new SystemUsageIndicator();
+        this._settings = this.getSettings();
+        this._indicator = new SystemUsageIndicator(this._settings);
         Main.panel.addToStatusArea('system-usage', this._indicator, 0, 'right');
     }
 
@@ -743,5 +921,6 @@ export default class SystemUsageExtension extends Extension {
         Main.panel.menuManager.removeMenu(this._indicator.menu);
         this._indicator.destroy();
         this._indicator = null;
+        this._settings = null;
     }
 }

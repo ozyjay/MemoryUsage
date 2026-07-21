@@ -6,5 +6,6 @@
     "50"
   ],
   "url": "https://github.com/ozyjay/FedoraUsage",
+  "settings-schema": "org.gnome.shell.extensions.system-usage",
   "version-name": "1.0.0"
 }

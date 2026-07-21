@@ -29,9 +29,68 @@ Framework Computer Inc.
 - Simplifies common Framework Desktop sensor names, including CPU, GPU, NVMe,
   Wi-Fi, Ethernet and mainboard readings.
 - Hides stopped fans and shows additional active fans in the dropdown menu.
+- Records a timestamped sensor snapshot every two seconds in JSON Lines format.
+- Keeps seven daily sensor log files in `~/System Usage Logs/`.
+- Provides a preferences switch for enabling or disabling sensor history.
 - Uses GNOME filesystem statistics for the system filesystem mounted at `/`.
 - Shows warning colour at 70% and critical colour at 90% for memory or storage,
   and at 75°C and 90°C for temperature.
+
+## Sensor history
+
+The extension writes one JSON object per line to:
+
+```text
+~/System Usage Logs/sensor-data-YYYY-MM-DD.jsonl
+```
+
+Each snapshot contains RAM, swap, system filesystem, temperature and fan data.
+Temperature readings use `hwmon` when available and fall back to thermal zones,
+so the two sources are not duplicated. Stopped fans are included in the log even
+though they remain hidden from the panel and menu. Values use explicit units in
+their field names, such as `totalKib`, `totalBytes`, `temperatureC` and
+`speedRpm`.
+
+The log directory and files are readable only by your user account. A new file
+is started each local calendar day, and the current day plus the previous six
+days are retained. Other files in the directory are not removed. At a two-second
+interval, the extension writes 43,200 snapshots per full day. File sizes depend
+on the number of sensors; for example, a 2 KiB snapshot is about 84 MiB per day
+and 591 MiB across seven days.
+
+Sensor history is enabled by default. Open the extension's preferences and turn
+off **Record sensor history** to stop writing new snapshots. Existing log files
+are retained, and panel monitoring continues normally.
+
+```bash
+gnome-extensions prefs system-usage@crunchycodes.net
+```
+
+Read today's latest records with:
+
+```bash
+tail -n 20 "$HOME/System Usage Logs/sensor-data-$(date +%F).jsonl"
+```
+
+For formatted live output with `jq`:
+
+```bash
+tail -f "$HOME/System Usage Logs/sensor-data-$(date +%F).jsonl" | jq .
+```
+
+Each record has this top-level structure:
+
+```json
+{
+  "timestamp": "2026-07-21T10:15:30.000000+10",
+  "schemaVersion": 1,
+  "memory": {},
+  "swap": {},
+  "filesystems": [],
+  "temperatures": [],
+  "fans": []
+}
+```
 
 ## Install for development
 
