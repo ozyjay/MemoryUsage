@@ -10,6 +10,14 @@ const SENSOR_HISTORY_ENABLED_KEY = 'sensor-history-enabled';
 const SENSOR_HISTORY_RETENTION_DAYS_KEY = 'sensor-history-retention-days';
 const SENSOR_HISTORY_RETENTION_UNIT_KEY = 'sensor-history-retention-unit';
 
+const PANEL_ITEMS = [
+    ['show-memory-in-panel', 'Memory', 'Show current memory use'],
+    ['show-temperature-in-panel', 'Temperature', 'Show the hottest sensor reading'],
+    ['show-fan-in-panel', 'Fan', 'Show Fan 1 while it is running'],
+    ['show-system-filesystem-in-panel', 'System filesystem', 'Show usage for the filesystem mounted at /'],
+    ['show-work-filesystem-in-panel', 'Work SSD', 'Show usage for a mounted filesystem named Work'],
+];
+
 const RETENTION_UNITS = ['minutes', 'hours', 'days'];
 const RETENTION_UNIT_LABELS = ['Minutes', 'Hours', 'Days'];
 const RETENTION_UNIT_MAXIMUMS = {
@@ -25,6 +33,18 @@ export default class SystemUsagePreferences extends ExtensionPreferences {
             title: 'System Usage Monitor',
             icon_name: 'utilities-system-monitor-symbolic',
         });
+        const panelGroup = new Adw.PreferencesGroup({
+            title: 'Top bar',
+            description: 'Choose which readings appear in the top bar.',
+        });
+
+        for (const [key, title, subtitle] of PANEL_ITEMS) {
+            const row = new Adw.SwitchRow({title, subtitle});
+
+            settings.bind(key, row, 'active', Gio.SettingsBindFlags.DEFAULT);
+            panelGroup.add(row);
+        }
+
         const group = new Adw.PreferencesGroup({
             title: 'Sensor history',
             description: 'Control whether recent system readings are written to disk.',
@@ -81,6 +101,7 @@ export default class SystemUsagePreferences extends ExtensionPreferences {
         group.add(historyRow);
         group.add(retentionRow);
         group.add(retentionUnitRow);
+        page.add(panelGroup);
         page.add(group);
         window.add(page);
     }

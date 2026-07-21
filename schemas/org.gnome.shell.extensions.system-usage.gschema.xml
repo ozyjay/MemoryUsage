@@ -2,6 +2,31 @@
 <schemalist>
   <schema id="org.gnome.shell.extensions.system-usage"
           path="/org/gnome/shell/extensions/system-usage/">
+    <key name="show-memory-in-panel" type="b">
+      <default>true</default>
+      <summary>Show memory use in the top bar</summary>
+      <description>Show current memory use in the panel indicator.</description>
+    </key>
+    <key name="show-temperature-in-panel" type="b">
+      <default>true</default>
+      <summary>Show temperature in the top bar</summary>
+      <description>Show the hottest available temperature sensor in the panel indicator.</description>
+    </key>
+    <key name="show-fan-in-panel" type="b">
+      <default>true</default>
+      <summary>Show fan speed in the top bar</summary>
+      <description>Show Fan 1 speed in the panel indicator while the fan is running.</description>
+    </key>
+    <key name="show-system-filesystem-in-panel" type="b">
+      <default>true</default>
+      <summary>Show system filesystem use in the top bar</summary>
+      <description>Show usage for the filesystem mounted at the root path in the panel indicator.</description>
+    </key>
+    <key name="show-work-filesystem-in-panel" type="b">
+      <default>true</default>
+      <summary>Show Work SSD use in the top bar</summary>
+      <description>Show usage for the mounted Work filesystem in the panel indicator.</description>
+    </key>
     <key name="sensor-history-enabled" type="b">
       <default>false</default>
       <summary>Record sensor history</summary>

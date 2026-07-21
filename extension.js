@@ -30,11 +30,35 @@ const SENSOR_HISTORY_ENABLED_KEY = 'sensor-history-enabled';
 const SENSOR_HISTORY_RETENTION_DAYS_KEY = 'sensor-history-retention-days';
 const SENSOR_HISTORY_RETENTION_UNIT_KEY = 'sensor-history-retention-unit';
 const SENSOR_HISTORY_CLEANUP_INTERVAL_SECONDS = 60;
+const SHOW_MEMORY_KEY = 'show-memory-in-panel';
+const SHOW_TEMPERATURE_KEY = 'show-temperature-in-panel';
+const SHOW_FAN_KEY = 'show-fan-in-panel';
+const SHOW_SYSTEM_FILESYSTEM_KEY = 'show-system-filesystem-in-panel';
+const SHOW_WORK_FILESYSTEM_KEY = 'show-work-filesystem-in-panel';
+
+function _workSsdPaths() {
+    const userName = GLib.get_user_name();
+
+    return [
+        `/run/media/${userName}/Work`,
+        `/media/${userName}/Work`,
+        '/mnt/Work',
+        '/mnt/work',
+        '/media/Work',
+        '/work',
+    ];
+}
 
 const STORAGE_FILESYSTEMS = [
     {
         name: 'System filesystem',
         paths: ['/'],
+        panelSettingKey: SHOW_SYSTEM_FILESYSTEM_KEY,
+    },
+    {
+        name: 'Work SSD',
+        paths: _workSsdPaths(),
+        panelSettingKey: SHOW_WORK_FILESYSTEM_KEY,
     },
 ];
 
@@ -689,6 +713,7 @@ class SystemUsageIndicator extends PanelMenu.Button {
 
         this._timeoutId = 0;
         this._settings = settings;
+        this._settingsSignalIds = [];
         this._openPreferences = openPreferences;
         this._historyLogger = new SensorHistoryLogger();
 
@@ -752,7 +777,7 @@ class SystemUsageIndicator extends PanelMenu.Button {
         this._panelBox.add_child(this._fanIconLabel);
         this._panelBox.add_child(this._fanSpeedLabel);
 
-        this._storagePercentLabels = STORAGE_FILESYSTEMS.map(() => {
+        this._storagePanelLabels = STORAGE_FILESYSTEMS.map(() => {
             const iconLabel = new St.Label({
                 style_class: 'system-usage-label system-usage-icon',
                 text: PANEL_FILESYSTEM_LABEL,
@@ -767,7 +792,7 @@ class SystemUsageIndicator extends PanelMenu.Button {
             this._panelBox.add_child(iconLabel);
             this._panelBox.add_child(percentLabel);
 
-            return percentLabel;
+            return {iconLabel, percentLabel};
         });
 
         this._ramItem = new PopupMenu.PopupMenuItem('RAM: --', {
@@ -810,6 +835,19 @@ class SystemUsageIndicator extends PanelMenu.Button {
         for (const item of this._storageItems)
             this.menu.addMenuItem(item);
 
+        for (const key of [
+            SHOW_MEMORY_KEY,
+            SHOW_TEMPERATURE_KEY,
+            SHOW_FAN_KEY,
+            SHOW_SYSTEM_FILESYSTEM_KEY,
+            SHOW_WORK_FILESYSTEM_KEY,
+        ]) {
+            this._settingsSignalIds.push(this._settings.connect(
+                `changed::${key}`,
+                () => this._applyPanelVisibility()));
+        }
+
+        this._applyPanelVisibility();
         this._update();
         this._timeoutId = GLib.timeout_add_seconds(
             GLib.PRIORITY_DEFAULT,
@@ -826,7 +864,34 @@ class SystemUsageIndicator extends PanelMenu.Button {
             this._timeoutId = 0;
         }
 
+        for (const signalId of this._settingsSignalIds)
+            this._settings.disconnect(signalId);
+        this._settingsSignalIds = [];
+
         super.destroy();
+    }
+
+    _applyPanelVisibility() {
+        const showMemory = this._settings.get_boolean(SHOW_MEMORY_KEY);
+        const showTemperature = this._settings.get_boolean(SHOW_TEMPERATURE_KEY);
+
+        this._memoryIconLabel.visible = showMemory;
+        this._memoryPercentLabel.visible = showMemory;
+        this._temperatureIconLabel.visible = showTemperature;
+        this._temperatureLabel.visible = showTemperature;
+
+        const showFan = this._settings.get_boolean(SHOW_FAN_KEY) &&
+            this._fanSpeedLabel.text !== '';
+        this._fanIconLabel.visible = showFan;
+        this._fanSpeedLabel.visible = showFan;
+
+        this._storagePanelLabels.forEach((labels, index) => {
+            const visible = this._settings.get_boolean(
+                STORAGE_FILESYSTEMS[index].panelSettingKey);
+
+            labels.iconLabel.visible = visible;
+            labels.percentLabel.visible = visible;
+        });
     }
 
     _update() {
@@ -845,8 +910,8 @@ class SystemUsageIndicator extends PanelMenu.Button {
             this._temperatureItem.label.text = 'Hottest: unavailable';
             this._setTemperatureSensorItems([]);
             this._setFanItems({fanOne: null, otherFans: []});
-            for (const label of this._storagePercentLabels)
-                label.text = '--%';
+            for (const labels of this._storagePanelLabels)
+                labels.percentLabel.text = '--%';
             this._setLevelClass('unknown');
             return;
         }
@@ -908,12 +973,12 @@ class SystemUsageIndicator extends PanelMenu.Button {
 
         storageStats.forEach((storage, index) => {
             if (storage.mounted) {
-                this._storagePercentLabels[index].text = `${storage.usedPercent}%`;
+                this._storagePanelLabels[index].percentLabel.text = `${storage.usedPercent}%`;
                 this._storageItems[index].label.text =
                     `${storage.name} (${storage.path}): ${_formatBytes(storage.used)} / ${_formatBytes(storage.total)} ` +
                     `(${storage.usedPercent}%)`;
             } else {
-                this._storagePercentLabels[index].text = '--%';
+                this._storagePanelLabels[index].percentLabel.text = '--%';
                 this._storageItems[index].label.text =
                     `${storage.name}: not mounted`;
             }
@@ -979,6 +1044,10 @@ class SystemUsageIndicator extends PanelMenu.Button {
         this._fanSpeedLabel.visible = showFanOne;
         this._fanItem.visible = showFanOne;
         this._fanSpeedLabel.text = showFanOne ? _formatFanSpeed(fanOne.speed) : '';
+        const showFanInPanel = showFanOne && this._settings.get_boolean(SHOW_FAN_KEY);
+
+        this._fanIconLabel.visible = showFanInPanel;
+        this._fanSpeedLabel.visible = showFanInPanel;
 
         if (showFanOne)
             this._fanItem.label.text = `${fanOne.name}: ${_formatFanSpeed(fanOne.speed)}`;

@@ -1,10 +1,9 @@
 # System Usage Monitor for Framework Desktop
 
 A GNOME Shell system monitor built for Framework Desktop and compatible with
-other computers running Fedora 44 Workstation. It shows RAM, temperature,
-active fan speed and system
-filesystem usage in the top bar, with additional RAM, swap, sensor, fan and
-storage details in a dropdown menu.
+other computers running Fedora 44 Workstation. It shows configurable RAM,
+temperature, active fan speed and filesystem readings in the top bar, with
+additional RAM, swap, sensor, fan and storage details in a dropdown menu.
 
 The extension targets GNOME Shell 50 and is currently tested on Fedora 44
 Workstation. It uses standard Linux interfaces, so its core memory and
@@ -20,8 +19,8 @@ Framework Computer Inc.
 ## Features
 
 - Updates every two seconds.
-- Shows memory use, the hottest detected sensor, active Fan 1 speed and system
-  filesystem use in the top bar.
+- Shows configurable memory, hottest-sensor, active Fan 1, system filesystem
+  and Work SSD readings in the top bar.
 - Switches from `🌡` to `🔥` when the hottest sensor reaches 75°C.
 - Uses `/proc/meminfo` and `MemAvailable` for RAM usage.
 - Reads Linux `hwmon` temperature and fan sensors, falling back to
@@ -32,8 +31,10 @@ Framework Computer Inc.
 - Records a timestamped sensor snapshot every two seconds in JSON Lines format.
 - Keeps sensor history for a configurable number of minutes, hours or days in
   `~/System Usage Logs/`.
-- Provides a preferences switch for enabling or disabling sensor history.
+- Provides preferences switches for top-bar readings and sensor history.
 - Uses GNOME filesystem statistics for the system filesystem mounted at `/`.
+- Looks for a secondary `Work` SSD at common mount points including
+  `/run/media/$USER/Work`, `/mnt/Work` and `/mnt/work`.
 - Shows warning colour at 70% and critical colour at 90% for memory or storage,
   and at 75°C and 90°C for temperature.
 
@@ -70,6 +71,10 @@ Reducing retention removes expired matching records during the next snapshot.
 ```bash
 gnome-extensions prefs system-usage@crunchycodes.net
 ```
+
+The same preferences window controls which readings appear in the top bar.
+Disabling a top-bar reading does not remove its details from the dropdown or
+sensor history.
 
 Read today's latest records with:
 
